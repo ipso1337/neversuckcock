@@ -1,11 +1,190 @@
--- Sound ESP Integration Function для добавления в существующий GUI
--- https://github.com/ipso1337/neversuckcock/blob/main/soundESP
+-- Sound ESP Module для Roblox
+-- Создает визуальные индикаторы звуков игроков
+-- Совместим с Mercury UI Library
 
+local SoundESP = {}
+SoundESP.__index = SoundESP
+
+-- Конфигурация по умолчанию
+local Config = {
+    enabled = false,
+    circleSize = 3,
+    transparency = 0.3,
+    duration = 2,
+    stepDistance = 3,
+    color = Color3.fromRGB(255, 0, 0),
+    showAllPlayers = true,
+    maxCircles = 50
+}
+
+-- Локальные переменные
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local LocalPlayer = Players.LocalPlayer
+local circles = {}
+local connections = {}
+local lastPositions = {}
+
+-- Создание круга-индикатора
+local function createSoundCircle(position, player)
+    if #circles >= Config.maxCircles then
+        local oldestCircle = table.remove(circles, 1)
+        if oldestCircle and oldestCircle.Parent then
+            oldestCircle:Destroy()
+        end
+    end
+    
+    local circle = Instance.new("Part")
+    circle.Name = "SoundCircle"
+    circle.Material = Enum.Material.Neon
+    circle.Shape = Enum.PartType.Cylinder
+    circle.Size = Vector3.new(0.2, Config.circleSize, Config.circleSize)
+    circle.Position = position
+    circle.Anchored = true
+    circle.CanCollide = false
+    circle.Color = Config.color
+    circle.Transparency = Config.transparency
+    circle.Parent = workspace
+    
+    -- Добавляем rotation для правильной ориентации
+    circle.Rotation = Vector3.new(0, 0, 90)
+    
+    -- Анимация исчезновения
+    local startTime = tick()
+    local connection
+    connection = RunService.Heartbeat:Connect(function()
+        local elapsed = tick() - startTime
+        if elapsed >= Config.duration then
+            circle:Destroy()
+            connection:Disconnect()
+            -- Удаляем из таблицы
+            for i, c in pairs(circles) do
+                if c == circle then
+                    table.remove(circles, i)
+                    break
+                end
+            end
+        else
+            -- Плавное исчезновение
+            local alpha = elapsed / Config.duration
+            circle.Transparency = Config.transparency + (1 - Config.transparency) * alpha
+            circle.Size = Vector3.new(0.2, Config.circleSize * (1 - alpha * 0.5), Config.circleSize * (1 - alpha * 0.5))
+        end
+    end)
+    
+    table.insert(circles, circle)
+end
+
+-- Отслеживание звуков игрока
+local function trackPlayerSounds(player)
+    if not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then
+        return
+    end
+    
+    local humanoid = player.Character:FindFirstChild("Humanoid")
+    if not humanoid then return end
+    
+    -- Отслеживание движения для звуков шагов
+    local lastPosition = lastPositions[player.UserId] or player.Character.HumanoidRootPart.Position
+    local currentPosition = player.Character.HumanoidRootPart.Position
+    local distance = (currentPosition - lastPosition).Magnitude
+    
+    -- Проверяем движение и скорость
+    if distance > Config.stepDistance and humanoid.MoveDirection.Magnitude > 0 then
+        if Config.showAllPlayers or player == LocalPlayer then
+            createSoundCircle(currentPosition, player)
+        end
+        lastPositions[player.UserId] = currentPosition
+    end
+    
+    -- Отслеживание звуков от SoundService
+    for _, sound in pairs(player.Character:GetDescendants()) do
+        if sound:IsA("Sound") and sound.IsPlaying then
+            if Config.showAllPlayers or player == LocalPlayer then
+                createSoundCircle(player.Character.HumanoidRootPart.Position, player)
+            end
+        end
+    end
+end
+
+-- Методы SoundESP
+function SoundESP:Start()
+    if Config.enabled then return end
+    Config.enabled = true
+    
+    -- Основной цикл отслеживания
+    connections.mainLoop = RunService.Heartbeat:Connect(function()
+        for _, player in pairs(Players:GetPlayers()) do
+            if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                trackPlayerSounds(player)
+            end
+        end
+    end)
+    
+    print("Sound ESP включен")
+end
+
+function SoundESP:Stop()
+    if not Config.enabled then return end
+    Config.enabled = false
+    
+    -- Останавливаем все соединения
+    for _, connection in pairs(connections) do
+        if connection then
+            connection:Disconnect()
+        end
+    end
+    connections = {}
+    
+    -- Очищаем все круги
+    for _, circle in pairs(circles) do
+        if circle and circle.Parent then
+            circle:Destroy()
+        end
+    end
+    circles = {}
+    lastPositions = {}
+    
+    print("Sound ESP выключен")
+end
+
+function SoundESP:IsEnabled()
+    return Config.enabled
+end
+
+function SoundESP:SetSize(size)
+    Config.circleSize = math.clamp(size, 1, 10)
+end
+
+function SoundESP:SetTransparency(transparency)
+    Config.transparency = math.clamp(transparency, 0, 1)
+end
+
+function SoundESP:SetDuration(duration)
+    Config.duration = math.clamp(duration, 0.5, 5)
+end
+
+function SoundESP:SetStepDistance(distance)
+    Config.stepDistance = math.clamp(distance, 1, 10)
+end
+
+function SoundESP:SetColor(color)
+    if typeof(color) == "Color3" then
+        Config.color = color
+    end
+end
+
+function SoundESP:SetShowAllPlayers(showAll)
+    Config.showAllPlayers = showAll
+end
+
+function SoundESP:GetConfig()
+    return Config
+end
+
+-- Функция интеграции с Mercury UI
 local function addSoundESPToGUI(gui, tabName)
     tabName = tabName or "Sound ESP"
-    
-    -- Загрузка Sound ESP модуля с GitHub
-    local SoundESP = loadstring(game:HttpGet("https://raw.githubusercontent.com/ipso1337/neversuckcock/main/soundESP"))()
     
     -- Создание нового таба
     local soundTab = gui:tab{
@@ -13,31 +192,20 @@ local function addSoundESPToGUI(gui, tabName)
         Name = tabName
     }
     
-    -- Чекбокс включения/выключения
-    soundTab:checkbox({
-        Name = "Enable Sound ESP",
-        Default = false,
-        Callback = function(v)
-            if v then
-                SoundESP:Start()
-                gui:set_status("Sound ESP: ON")
-            else
-                SoundESP:Stop()
-                gui:set_status("Sound ESP: OFF")
-            end
-        end,
-    })
+    -- Состояние для кнопки toggle
+    local espEnabled = false
     
-    -- Кнопка включения/выключения (альтернатива)
+    -- Кнопка включения/выключения
     soundTab:button({
         Name = "Toggle Sound ESP",
         Callback = function()
-            if SoundESP:IsEnabled() then
-                SoundESP:Stop()
-                gui:set_status("Sound ESP: OFF")
-            else
+            espEnabled = not espEnabled
+            if espEnabled then
                 SoundESP:Start()
                 gui:set_status("Sound ESP: ON")
+            else
+                SoundESP:Stop()
+                gui:set_status("Sound ESP: OFF")
             end
         end,
     })
@@ -89,7 +257,7 @@ local function addSoundESPToGUI(gui, tabName)
     -- Выбор цвета
     soundTab:color_picker({
         Name = "Circle Color",
-        Style = Library.ColorPickerStyles.Legacy,
+        Style = gui.Library.ColorPickerStyles.Legacy,
         Description = "Click to adjust color...",
         Callback = function(color)
             SoundESP:SetColor(color)
@@ -114,16 +282,37 @@ local function addSoundESPToGUI(gui, tabName)
     soundTab:button({
         Name = "Clear All Circles",
         Callback = function()
-            for _, part in pairs(workspace:GetChildren()) do
-                if part.Name == "SoundCircle" then
-                    part:Destroy()
+            for _, circle in pairs(circles) do
+                if circle and circle.Parent then
+                    circle:Destroy()
                 end
             end
+            circles = {}
             gui:set_status("Circles cleared")
+        end,
+    })
+    
+    -- Информационная кнопка
+    soundTab:button({
+        Name = "Show Config",
+        Callback = function()
+            local config = SoundESP:GetConfig()
+            gui:prompt{
+                Title = "Sound ESP Config",
+                Text = string.format("Enabled: %s\nSize: %.1f\nTransparency: %.2f\nDuration: %.1f\nStep Distance: %.1f", 
+                    tostring(config.enabled), config.circleSize, config.transparency, config.duration, config.stepDistance)
+            }
         end,
     })
     
     return soundTab
 end
 
-return addSoundESPToGUI
+-- Возвращаем модуль
+return {
+    SoundESP = SoundESP,
+    addToGUI = addSoundESPToGUI,
+    createInstance = function()
+        return setmetatable({}, SoundESP)
+    end
+}
