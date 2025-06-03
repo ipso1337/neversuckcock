@@ -1,251 +1,89 @@
--- Sound ESP Module for Mercury Library
+-- Sound ESP Integration Function для добавления в существующий GUI
 -- https://github.com/ipso1337/neversuckcock/blob/main/soundESP
 
-local SoundESP = {}
-SoundESP.__index = SoundESP
-
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-
--- Настройки по умолчанию
-local Settings = {
-    Enabled = false,
-    CircleSize = 3,
-    CircleColor = Color3.fromRGB(0, 162, 255),
-    Transparency = 0.3,
-    Duration = 2,
-    StepDistance = 3,
-    ShowAllPlayers = true
-}
-
-local playerData = {}
-local connections = {}
-
--- Функция создания 3D круга
-local function createSoundCircle(position, color, size)
-    local part = Instance.new("Part")
-    part.Name = "SoundCircle"
-    part.Shape = Enum.PartType.Cylinder
-    part.Size = Vector3.new(0.1, size, size)
-    part.Position = position
-    part.Anchored = true
-    part.CanCollide = false
-    part.Material = Enum.Material.Neon
-    part.Color = color
-    part.Transparency = Settings.Transparency
-    part.CFrame = part.CFrame * CFrame.Angles(0, 0, math.rad(90))
-    part.Parent = workspace
+local function addSoundESPToGUI(gui, tabName)
+    tabName = tabName or "Sound ESP"
     
-    -- Анимация исчезновения
-    local startTime = tick()
-    local connection
-    connection = RunService.Heartbeat:Connect(function()
-        local elapsed = tick() - startTime
-        if elapsed > Settings.Duration then
-            part:Destroy()
-            connection:Disconnect()
-        else
-            part.Transparency = Settings.Transparency + (elapsed / Settings.Duration) * (1 - Settings.Transparency)
-            local scale = 1 + (elapsed / Settings.Duration) * 0.3
-            part.Size = Vector3.new(0.1, size * scale, size * scale)
-        end
-    end)
-end
-
--- Функция отслеживания игрока
-local function trackPlayer(player)
-    local function onCharacterAdded(character)
-        local humanoid = character:WaitForChild("Humanoid")
-        local rootPart = character:WaitForChild("HumanoidRootPart")
-        
-        playerData[player] = {
-            character = character,
-            humanoid = humanoid,
-            lastPosition = rootPart.Position
-        }
-    end
+    -- Загрузка Sound ESP модуля с GitHub
+    local SoundESP = loadstring(game:HttpGet("https://raw.githubusercontent.com/ipso1337/neversuckcock/main/soundESP"))()
     
-    if player.Character then
-        onCharacterAdded(player.Character)
-    end
-    player.CharacterAdded:Connect(onCharacterAdded)
-end
-
--- Основные функции модуля
-function SoundESP:Start()
-    if connections.main then return end
-    
-    Settings.Enabled = true
-    
-    -- Отслеживание всех игроков
-    if Settings.ShowAllPlayers then
-        for _, player in pairs(Players:GetPlayers()) do
-            trackPlayer(player)
-        end
-        
-        connections.playerAdded = Players.PlayerAdded:Connect(trackPlayer)
-        connections.playerRemoving = Players.PlayerRemoving:Connect(function(player)
-            playerData[player] = nil
-        end)
-    else
-        -- Только локальный игрок
-        trackPlayer(Players.LocalPlayer)
-    end
-    
-    -- Основной цикл
-    connections.main = RunService.Heartbeat:Connect(function()
-        if not Settings.Enabled then return end
-        
-        for player, data in pairs(playerData) do
-            if data.character and data.character.Parent and data.character.HumanoidRootPart then
-                local currentPosition = data.character.HumanoidRootPart.Position
-                local distance = (currentPosition - data.lastPosition).Magnitude
-                
-                if data.humanoid.MoveDirection.Magnitude > 0 and distance >= Settings.StepDistance then
-                    local groundPosition = Vector3.new(currentPosition.X, currentPosition.Y - 3, currentPosition.Z)
-                    createSoundCircle(groundPosition, Settings.CircleColor, Settings.CircleSize)
-                    data.lastPosition = currentPosition
-                end
-            end
-        end
-    end)
-end
-
-function SoundESP:Stop()
-    Settings.Enabled = false
-    
-    for _, connection in pairs(connections) do
-        if connection then
-            connection:Disconnect()
-        end
-    end
-    
-    connections = {}
-    playerData = {}
-    
-    -- Удаление всех кругов
-    for _, part in pairs(workspace:GetChildren()) do
-        if part.Name == "SoundCircle" then
-            part:Destroy()
-        end
-    end
-end
-
-function SoundESP:SetSize(size)
-    Settings.CircleSize = size
-end
-
-function SoundESP:SetColor(color)
-    Settings.CircleColor = color
-end
-
-function SoundESP:SetTransparency(transparency)
-    Settings.Transparency = transparency
-end
-
-function SoundESP:SetDuration(duration)
-    Settings.Duration = duration
-end
-
-function SoundESP:SetStepDistance(distance)
-    Settings.StepDistance = distance
-end
-
-function SoundESP:SetShowAllPlayers(show)
-    Settings.ShowAllPlayers = show
-    if Settings.Enabled then
-        self:Stop()
-        self:Start()
-    end
-end
-
-function SoundESP:IsEnabled()
-    return Settings.Enabled
-end
-
--- Создание GUI с Mercury Library
-function SoundESP:CreateGUI()
-    local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/deeeity/mercury-lib/master/src.lua"))()
-    local gui = Library:create{
-        Theme = Library.Themes.Serika
-    }
-    
-    local tab = gui:tab{
-        Icon = "rbxassetid://6034996695",
-        Name = "Sound ESP"
+    -- Создание нового таба
+    local soundTab = gui:tab{
+        Icon = "rbxassetid://6764432408",
+        Name = tabName
     }
     
     -- Кнопка включения/выключения
-    tab:button({
+    soundTab:button({
         Name = "Toggle Sound ESP",
         Callback = function()
-            if self:IsEnabled() then
-                self:Stop()
+            if SoundESP:IsEnabled() then
+                SoundESP:Stop()
                 gui:set_status("Sound ESP: OFF")
             else
-                self:Start()
+                SoundESP:Start()
                 gui:set_status("Sound ESP: ON")
             end
         end,
     })
     
-    -- Настройка размера
-    tab:slider({
+    -- Настройка размера кругов
+    soundTab:slider({
         Name = "Circle Size",
         Min = 1,
         Max = 10,
         Default = 3,
         Callback = function(v)
-            self:SetSize(v)
+            SoundESP:SetSize(v)
         end
     })
     
     -- Настройка прозрачности
-    tab:slider({
+    soundTab:slider({
         Name = "Transparency",
         Min = 0,
         Max = 1,
         Default = 0.3,
         Callback = function(v)
-            self:SetTransparency(v)
+            SoundESP:SetTransparency(v)
         end
     })
     
     -- Настройка длительности
-    tab:slider({
-        Name = "Duration",
+    soundTab:slider({
+        Name = "Duration (sec)",
         Min = 0.5,
         Max = 5,
         Default = 2,
         Callback = function(v)
-            self:SetDuration(v)
+            SoundESP:SetDuration(v)
         end
     })
     
-    -- Настройка расстояния шагов
-    tab:slider({
+    -- Настройка расстояния между шагами
+    soundTab:slider({
         Name = "Step Distance",
         Min = 1,
         Max = 10,
         Default = 3,
         Callback = function(v)
-            self:SetStepDistance(v)
+            SoundESP:SetStepDistance(v)
         end
     })
     
     -- Выбор цвета
-    tab:color_picker({
+    soundTab:color_picker({
         Name = "Circle Color",
         Style = Library.ColorPickerStyles.Legacy,
         Description = "Click to adjust color...",
         Callback = function(color)
-            self:SetColor(color)
+            SoundESP:SetColor(color)
         end,
     })
     
-    -- Переключатель для всех игроков
-    tab:dropdown({
-        Name = "Target",
+    -- Выбор кого отслеживать
+    soundTab:dropdown({
+        Name = "Target Players",
         StartingText = "All Players",
         Items = {
             "All Players",
@@ -253,12 +91,24 @@ function SoundESP:CreateGUI()
         },
         Description = "Choose who to track",
         Callback = function(v)
-            self:SetShowAllPlayers(v == "All Players")
+            SoundESP:SetShowAllPlayers(v == "All Players")
         end,
     })
     
-    gui:set_status("Sound ESP Ready")
-    return gui
+    -- Кнопка очистки всех кругов
+    soundTab:button({
+        Name = "Clear All Circles",
+        Callback = function()
+            for _, part in pairs(workspace:GetChildren()) do
+                if part.Name == "SoundCircle" then
+                    part:Destroy()
+                end
+            end
+            gui:set_status("Circles cleared")
+        end,
+    })
+    
+    return soundTab
 end
 
-return SoundESP
+return addSoundESPToGUI
