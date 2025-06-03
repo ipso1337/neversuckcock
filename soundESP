@@ -13,7 +13,22 @@ local function addSoundESPToGUI(gui, tabName)
         Name = tabName
     }
     
-    -- Кнопка включения/выключения
+    -- Чекбокс включения/выключения
+    soundTab:checkbox({
+        Name = "Enable Sound ESP",
+        Default = false,
+        Callback = function(v)
+            if v then
+                SoundESP:Start()
+                gui:set_status("Sound ESP: ON")
+            else
+                SoundESP:Stop()
+                gui:set_status("Sound ESP: OFF")
+            end
+        end,
+    })
+    
+    -- Кнопка включения/выключения (альтернатива)
     soundTab:button({
         Name = "Toggle Sound ESP",
         Callback = function()
